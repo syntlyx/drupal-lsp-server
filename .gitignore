@@ -1,0 +1,21 @@
+node_modules/
+out/
+*.log
+.DS_Store
+.vscode/
+tsconfig.tsbuildinfo
+
+# Editor directories
+.idea/
+
+# OS files
+Thumbs.db
+
+# Test files
+*.test.ts
+test/
+
+# npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

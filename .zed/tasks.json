@@ -1,0 +1,27 @@
+[
+  {
+    "label": "compile",
+    "command": "npm run compile",
+    "tags": ["build"]
+  },
+  {
+    "label": "watch",
+    "command": "npm run watch",
+    "tags": ["build"]
+  },
+  {
+    "label": "lint",
+    "command": "npm run lint",
+    "tags": ["lint"]
+  },
+  {
+    "label": "lint:fix",
+    "command": "npm run lint:fix",
+    "tags": ["lint"]
+  },
+  {
+    "label": "test-parser",
+    "command": "npm run compile && node out/test-parser.js",
+    "tags": ["test"]
+  }
+]
