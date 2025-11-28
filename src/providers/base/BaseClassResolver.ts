@@ -29,10 +29,11 @@ export class BaseClassResolver {
       const moduleName = parts[1];
       const relativePath = parts.slice(2).join('/');
 
-      // Try custom, contrib, core modules
+      // Try custom, contrib, core modules, root modules
       const locations = [
         path.join(this.drupalRoot, 'modules', 'custom', moduleName, 'src', `${relativePath}.php`),
         path.join(this.drupalRoot, 'modules', 'contrib', moduleName, 'src', `${relativePath}.php`),
+        path.join(this.drupalRoot, 'core', 'modules', moduleName, 'src', `${relativePath}.php`),
         path.join(this.drupalRoot, 'modules', moduleName, 'src', `${relativePath}.php`)
       ];
 
@@ -91,9 +92,7 @@ export class BaseClassResolver {
 
       if (methodName) {
         // Search for method definition
-        // Match: public function methodName(
-        // Match: public static function methodName(
-        const methodRegex = new RegExp(`\\s+(public|protected|private)\\s+(static\\s+)?function\\s+${methodName}\\s*\\(`);
+        const methodRegex = new RegExp(`^\\s*(public|protected|private)\\s+(static\\s+)?function\\s+${methodName}\\s*\\(`);
 
         for (let i = 0; i < lines.length; i++) {
           if (methodRegex.test(lines[i])) {
@@ -103,10 +102,7 @@ export class BaseClassResolver {
       }
 
       // Fallback to class definition or if no method specified
-      // Match: class ClassName
-      // Match: abstract class ClassName
-      // Match: final class ClassName
-      const classRegex = /\s*(abstract\s+|final\s+)?class\s+\w+/;
+      const classRegex = /^(abstract\s+|final\s+)?class\s+\w+/;
 
       for (let i = 0; i < lines.length; i++) {
         if (classRegex.test(lines[i])) {

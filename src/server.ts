@@ -53,8 +53,12 @@ export function getPhpCsProvider(): PhpCsProvider {
   return phpCsProvider;
 }
 
-export function isCustomModulesPath(filePath: string): boolean {
-  return filePath.includes('/modules/custom');
+/**
+ * Check if file path is in custom code (not core/contrib)
+ * Features like formatting/diagnostics should only run on custom code
+ */
+export function isCustomCode(filePath: string): boolean {
+  return !filePath.includes('/core/') && !filePath.includes('/modules/contrib/');
 }
 
 // Providers registry
@@ -155,7 +159,7 @@ connection.onCompletion(
 
     const results: CompletionItem[] = [];
 
-    if (!isCustomModulesPath(document.uri)) {
+    if (!isCustomCode(document.uri)) {
       return results;
     }
 
@@ -230,9 +234,9 @@ documents.onDidChangeContent(async (change) => {
   const uri = change.document.uri;
   const filePath = uri.replace('file://', '');
 
-  // Only reindex if it's a .services.yml file in modules/custom
+  // Only reindex if it's a .services.yml file in custom code
   if (filePath.endsWith('.services.yml') && yamlServiceParser) {
-    if (!isCustomModulesPath(filePath)) {
+    if (isCustomCode(filePath)) {
       await yamlServiceParser.handleFileChange(filePath).catch((err) => {
         connection.console.error(`Failed to reindex ${filePath}: ${err}`);
       });
@@ -247,7 +251,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
 
     if (!filePath.endsWith('.services.yml')) continue;
     if (!yamlServiceParser) continue;
-    if (!isCustomModulesPath(filePath)) continue;
+    if (!isCustomCode(filePath)) continue;
 
     // Handle file creation or modification
     if (event.type === 1 || event.type === 2) { // Created or Changed
@@ -268,7 +272,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
 // Pull Diagnostics handler (LSP 3.17)
 connection.languages.diagnostics.on(async (params) => {
   const document = documents.get(params.textDocument.uri);
-  if (!document || !isCustomModulesPath(document.uri)) {
+  if (!document || !isCustomCode(document.uri)) {
     return { kind: 'full' as const, items: [] };
   }
 
@@ -293,7 +297,7 @@ connection.onCodeAction(
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
 
-    if (!phpCsProvider || !phpCsProvider.isEnabled() || !isCustomModulesPath(document.uri)) {
+    if (!phpCsProvider || !phpCsProvider.isEnabled() || !isCustomCode(document.uri)) {
       return [];
     }
 
@@ -340,7 +344,7 @@ connection.onDocumentFormatting(
       return null;
     }
 
-    if (!phpCsProvider || !phpCsProvider.isEnabled() || !isCustomModulesPath(document.uri)) {
+    if (!phpCsProvider || !phpCsProvider.isEnabled() || !isCustomCode(document.uri)) {
       return null;
     }
 

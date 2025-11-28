@@ -218,7 +218,13 @@ export class PhpCsProvider {
         // phpcbf returns 0 if no changes, 1 if fixed, 2 if errors remain
         const originalText = document.getText();
 
-        if (stdout && stdout !== originalText) {
+        const isValidOutput = stdout
+          && stdout !== originalText
+          && !stdout.includes('No violations')
+          && !stdout.includes('Time:')
+          && !stdout.includes('Memory:');
+
+        if (isValidOutput) {
           const lines = originalText.split('\n');
           const lastLine = lines.length - 1;
           const lastChar = lines[lastLine].length;

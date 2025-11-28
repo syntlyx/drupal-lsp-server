@@ -1,6 +1,6 @@
 {
   "name": "drupal-lsp-server",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "LSP server for Drupal with YAML autocomplete, PHP class navigation, and phpcs integration",
   "author": "syntlyx",
   "license": "MIT",
