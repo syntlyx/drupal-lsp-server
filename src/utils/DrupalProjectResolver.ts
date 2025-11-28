@@ -66,14 +66,6 @@ export class DrupalProjectResolver {
   }
 
   /**
-   * Resolve path relative to Drupal root
-   * @param relativePath Path relative to Drupal root (e.g., 'core/lib/Drupal.php')
-   */
-  resolveDrupalPath(relativePath: string): string {
-    return path.join(this.getDrupalRootAbsolute(), relativePath);
-  }
-
-  /**
    * Check if Drupal root was detected
    */
   isDrupalDetected(): boolean {

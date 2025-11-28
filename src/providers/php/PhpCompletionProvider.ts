@@ -2,19 +2,39 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Position, CompletionItem, TextEdit, Range } from 'vscode-languageserver';
 import { BaseCompletionProvider } from '../base/BaseCompletionProvider';
 import { PhpServiceNameExtractor } from './PhpServiceNameExtractor';
+import { PhpRouteNameExtractor } from './PhpRouteNameExtractor';
 import { DrupalService } from '../../parsers/YamlServiceParser';
+import { getYamlRouteParser } from '../../server';
 
 /**
  * PHP Completion Provider
- * Provides autocomplete for service names in DI calls
+ * Provides autocomplete for service names and routes in DI calls
  */
 export class PhpCompletionProvider extends BaseCompletionProvider {
+  private routeExtractor: PhpRouteNameExtractor;
+
   constructor() {
     super(new PhpServiceNameExtractor());
+    this.routeExtractor = new PhpRouteNameExtractor();
   }
 
   canProvide(document: TextDocument): boolean {
     return document.languageId === 'php' || document.uri.endsWith('.php');
+  }
+
+  async provideCompletions(document: TextDocument, position: Position): Promise<CompletionItem[]> {
+    const line = document.getText({
+      start: { line: position.line, character: 0 },
+      end: position
+    });
+
+    // Check for route completion
+    if (this.routeExtractor.isRouteContext(line)) {
+      return this.getRouteCompletions(document, position);
+    }
+
+    // Service completion (default behavior)
+    return super.provideCompletions(document, position);
   }
 
   protected isServiceCompletionContext(line: string): boolean {
@@ -90,5 +110,38 @@ export class PhpCompletionProvider extends BaseCompletionProvider {
     }
 
     return null;
+  }
+
+  private getRouteCompletions(document: TextDocument, position: Position): CompletionItem[] {
+    const routeParser = getYamlRouteParser();
+    if (!routeParser) return [];
+
+    const line = document.getText({
+      start: { line: position.line, character: 0 },
+      end: position
+    });
+
+    const typedText = this.routeExtractor.getTypedRoute(line, position.character);
+    const allRoutes = routeParser.getAllRoutes();
+
+    // Find quote position for textEdit
+    let quoteStart = -1;
+    for (let i = position.character - 1; i >= 0; i--) {
+      if (line[i] === "'" || line[i] === '"') {
+        quoteStart = i;
+        break;
+      }
+    }
+
+    if (quoteStart < 0) return [];
+
+    const replaceRange = Range.create(
+      position.line,
+      quoteStart + 1,
+      position.line,
+      position.character
+    );
+
+    return this.allRoutesCompletions(allRoutes, replaceRange, typedText);
   }
 }

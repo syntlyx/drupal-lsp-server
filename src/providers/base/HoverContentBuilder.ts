@@ -1,17 +1,30 @@
 import { BaseClassResolver, ClassInfo } from './BaseClassResolver';
 import { DrupalService } from '../../parsers/YamlServiceParser';
+import { getCacheManager } from '../../server';
 
 /**
  * Builds hover content for services and classes
  * Unified formatting for YAML and PHP providers
  */
 export class HoverContentBuilder {
+  // Cache TTLs for different content types
+  private readonly SERVICE_TTL = 10 * 60 * 1000; // 10 minutes (services rarely change)
+  private readonly CLASS_TTL = 5 * 60 * 1000;    // 5 minutes (classes change more often)
+
   constructor(private classResolver: BaseClassResolver) { }
 
   /**
    * Build hover content for a service
    */
   async buildServiceHover(service: DrupalService): Promise<string> {
+    const cache = getCacheManager();
+    const cacheKey = `service:${service.name}`;
+    const cached = cache.get(cacheKey) as string | undefined;
+
+    if (cached) {
+      return cached;
+    }
+
     let content = '';
 
     if (service.sourceFile) {
@@ -42,6 +55,7 @@ export class HoverContentBuilder {
       content += `**Arguments:** ${service.arguments.join(', ')}\n\n`;
     }
 
+    cache.set(cacheKey, content, this.SERVICE_TTL);
     return content;
   }
 
@@ -49,6 +63,16 @@ export class HoverContentBuilder {
    * Build hover content for a class (with optional method)
    */
   async buildClassHover(classInfo: ClassInfo): Promise<string> {
+    const cache = getCacheManager();
+    const cacheKey = classInfo.methodName
+      ? `method:${classInfo.className}::${classInfo.methodName}`
+      : `class:${classInfo.className}`;
+
+    const cached = cache.get(cacheKey) as string | undefined;
+    if (cached) {
+      return cached;
+    }
+
     let content = '';
     const classPath = this.classResolver.resolveClassPath(classInfo.className);
 
@@ -82,6 +106,7 @@ export class HoverContentBuilder {
       }
     }
 
+    cache.set(cacheKey, content, this.CLASS_TTL);
     return content;
   }
 

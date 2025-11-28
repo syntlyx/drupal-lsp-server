@@ -1,10 +1,11 @@
-import { CompletionItem, CompletionItemKind, Position } from 'vscode-languageserver';
+import {CompletionItem, CompletionItemKind, Position, Range, TextEdit} from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { DrupalService } from '../../parsers/YamlServiceParser';
 import { getYamlServiceParser } from '../../server';
 import { ICompletionProvider } from '../ICompletionProvider';
 import { BaseServiceNameExtractor } from './BaseServiceNameExtractor';
 import { BaseServiceProvider } from './BaseServiceProvider';
+import {DrupalRoute} from '../../parsers/YamlRouteParser';
 
 /**
  * Base Completion Provider
@@ -102,5 +103,48 @@ export abstract class BaseCompletionProvider extends BaseServiceProvider impleme
       // No match - lowest priority
       return '2_' + sortPrefix + serviceName;
     }
+  }
+
+  protected calculateRouteMatchScore(routeName: string, typed: string, sortPrefix: string): string {
+    if (!typed) return `${sortPrefix}_${routeName}`;
+
+    const lowerRoute = routeName.toLowerCase();
+    const lowerTyped = typed.toLowerCase();
+
+    if (lowerRoute === lowerTyped) return `${sortPrefix}_0_${routeName}`;
+    if (lowerRoute.startsWith(lowerTyped)) {
+      const remaining = routeName.length - typed.length;
+      return `${sortPrefix}_1_${remaining.toString().padStart(5, '0')}_${routeName}`;
+    }
+
+    return `${sortPrefix}_2_${routeName}`;
+  }
+
+  protected allRoutesCompletions(routes: DrupalRoute[], replaceRange: Range, typedText: string): CompletionItem[] {
+    return routes
+      .filter((route) => route.name.toLowerCase().includes(typedText.toLowerCase()))
+      .map((route) => {
+        const detail = route.sourceType ? `[${route.sourceType}] ${route.path || ''}` : route.path;
+        const sortPrefix = route.sourceType === 'custom' ? '0' : route.sourceType === 'contrib' ? '1' : '2';
+        const matchScore = this.calculateRouteMatchScore(route.name, typedText, sortPrefix);
+
+        return {
+          label: route.name,
+          kind: CompletionItemKind.Value,
+          detail: detail,
+          documentation: this.buildRouteDocumentation(route),
+          sortText: matchScore,
+          textEdit: TextEdit.replace(replaceRange, route.name),
+          filterText: route.name
+        };
+      });
+  }
+
+  protected buildRouteDocumentation(route: { name: string; path?: string; sourceFile?: string; sourceType?: string }): string {
+    let doc = `**Route:** ${route.name}\n\n`;
+    if (route.path) doc += `**Path:** ${route.path}\n\n`;
+    if (route.sourceType) doc += `**Source:** ${route.sourceType}\n\n`;
+    if (route.sourceFile) doc += `**File:** ${route.sourceFile}`;
+    return doc;
   }
 }

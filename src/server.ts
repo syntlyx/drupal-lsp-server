@@ -24,6 +24,8 @@ import { IDefinitionProvider } from './providers/IDefinitionProvider';
 import { IDiagnosticProvider } from './providers/IDiagnosticProvider';
 import { IHoverProvider } from './providers/IHoverProvider';
 import { YamlServiceParser } from './parsers/YamlServiceParser';
+import { YamlRouteParser } from './parsers/YamlRouteParser';
+import { YamlLinkParser } from './parsers/YamlLinkParser';
 import { DrupalProjectResolver } from './utils/DrupalProjectResolver';
 import { PhpCsProvider } from './providers/php/PhpCsProvider';
 import { ServerSettings, defaultSettings } from './types/ServerSettings';
@@ -35,6 +37,7 @@ import { YamlHoverProvider } from './providers/yaml/YamlHoverProvider';
 import { PhpDefinitionProvider } from './providers/php/PhpDefinitionProvider';
 import { PhpDiagnosticProvider } from './providers/php/PhpDiagnosticProvider';
 import { PhpHoverProvider } from './providers/php/PhpHoverProvider';
+import { CacheManager } from './utils/CacheManager';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -42,15 +45,30 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 let workspaceRoot: string | undefined;
 let drupalResolver: DrupalProjectResolver;
 let yamlServiceParser: YamlServiceParser;
+let yamlRouteParser: YamlRouteParser;
+let yamlLinkParser: YamlLinkParser;
 let phpCsProvider: PhpCsProvider;
+let cacheManager: CacheManager<unknown>;
 const serverSettings: ServerSettings = defaultSettings;
 
 export function getYamlServiceParser(): YamlServiceParser {
   return yamlServiceParser;
 }
 
+export function getYamlRouteParser(): YamlRouteParser {
+  return yamlRouteParser;
+}
+
+export function getYamlLinkParser(): YamlLinkParser {
+  return yamlLinkParser;
+}
+
 export function getPhpCsProvider(): PhpCsProvider {
   return phpCsProvider;
+}
+
+export function getCacheManager(): CacheManager<unknown> {
+  return cacheManager;
 }
 
 /**
@@ -99,7 +117,18 @@ connection.onInitialize(async (params: InitializeParams) => {
 
   if (workspaceRoot) {
     yamlServiceParser = new YamlServiceParser(drupalResolver);
+    yamlRouteParser = new YamlRouteParser(drupalResolver);
+    yamlLinkParser = new YamlLinkParser(drupalResolver);
     phpCsProvider = new PhpCsProvider(workspaceRoot, serverSettings.phpcs.enabled);
+    cacheManager = new CacheManager<unknown>();
+
+    // Periodic cache cleanup every 5 minutes
+    setInterval(() => {
+      const removed = cacheManager.cleanup();
+      if (removed > 0) {
+        connection.console.log(`Cache cleanup: removed ${removed} expired entries`);
+      }
+    }, 5 * 60 * 1000); // Every 5 minutes
 
     // Initialize YAML service parser - AWAIT to ensure indexing completes
     try {
@@ -107,6 +136,22 @@ connection.onInitialize(async (params: InitializeParams) => {
       connection.console.log(`Indexed ${servicesCount} services`);
     } catch (err) {
       connection.console.error(`Failed to index service files: ${err}`);
+    }
+
+    // Initialize YAML route parser
+    try {
+      const routesCount = await yamlRouteParser.scanAndIndex();
+      connection.console.log(`Indexed ${routesCount} routes`);
+    } catch (err) {
+      connection.console.error(`Failed to index routing files: ${err}`);
+    }
+
+    // Initialize YAML link parser
+    try {
+      const linksCount = await yamlLinkParser.scanAndIndex();
+      connection.console.log(`Indexed ${linksCount} links`);
+    } catch (err) {
+      connection.console.error(`Failed to index links files: ${err}`);
     }
 
     // Check phpcs availability
@@ -132,7 +177,7 @@ connection.onInitialize(async (params: InitializeParams) => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: {
         resolveProvider: false,
-        triggerCharacters: ['.', ':', '\\', '(']
+        triggerCharacters: ['.', ':', '\\', '(', "'", '"', ' ']
       },
       definitionProvider: true,
       hoverProvider: true,
@@ -229,42 +274,94 @@ connection.onHover(
   }
 );
 
-// Document change handler - reindex YAML service files (only custom modules)
+// Document change handler - reindex YAML files and clear hover cache
 documents.onDidChangeContent(async (change) => {
   const uri = change.document.uri;
   const filePath = uri.replace('file://', '');
 
-  // Only reindex if it's a .services.yml file in custom code
+  // Clear hover cache for PHP files (class/method documentation)
+  if (filePath.endsWith('.php')) {
+    cacheManager.clearPattern('class:*');
+    cacheManager.clearPattern('method:*');
+  }
+
+  // Reindex if it's a .services.yml file in custom code
   if (filePath.endsWith('.services.yml') && yamlServiceParser) {
     if (isCustomCode(filePath)) {
+      cacheManager.clearPattern('service:*');
       await yamlServiceParser.handleFileChange(filePath).catch((err) => {
+        connection.console.error(`Failed to reindex ${filePath}: ${err}`);
+      });
+    }
+  }
+
+  // Reindex if it's a .routing.yml file in custom code
+  if (filePath.endsWith('.routing.yml') && yamlRouteParser) {
+    if (isCustomCode(filePath)) {
+      cacheManager.clearPattern('route:*');
+      await yamlRouteParser.handleFileChange(filePath).catch((err) => {
+        connection.console.error(`Failed to reindex ${filePath}: ${err}`);
+      });
+    }
+  }
+
+  // Reindex if it's a .links.*.yml file in custom code
+  if (filePath.includes('.links.') && yamlLinkParser) {
+    if (isCustomCode(filePath)) {
+      cacheManager.clearPattern('link:*');
+      await yamlLinkParser.handleFileChange(filePath).catch((err) => {
         connection.console.error(`Failed to reindex ${filePath}: ${err}`);
       });
     }
   }
 });
 
-// File system watchers for new/deleted service files
+// File system watchers for new/deleted YAML files
 connection.onDidChangeWatchedFiles(async (change) => {
   for (const event of change.changes) {
     const filePath = event.uri.replace('file://', '');
-
-    if (!filePath.endsWith('.services.yml')) continue;
-    if (!yamlServiceParser) continue;
     if (!isCustomCode(filePath)) continue;
 
-    // Handle file creation or modification
-    if (event.type === 1 || event.type === 2) { // Created or Changed
-      await yamlServiceParser.handleFileChange(filePath).catch((err) => {
-        connection.console.error(`Failed to reindex ${filePath}: ${err}`);
-      });
-      connection.console.log(`Reindexed: ${filePath}`);
+    // Handle .services.yml files
+    if (filePath.endsWith('.services.yml') && yamlServiceParser) {
+      if (event.type === 1 || event.type === 2) {
+        await yamlServiceParser.handleFileChange(filePath).catch((err) => {
+          connection.console.error(`Failed to reindex ${filePath}: ${err}`);
+        });
+        connection.console.log(`Reindexed: ${filePath}`);
+      }
+      if (event.type === 3) {
+        yamlServiceParser.handleFileDelete(filePath);
+        connection.console.log(`Removed from index: ${filePath}`);
+      }
     }
 
-    // Handle file deletion
-    if (event.type === 3) { // Deleted
-      yamlServiceParser.handleFileDelete(filePath);
-      connection.console.log(`Removed from index: ${filePath}`);
+    // Handle .routing.yml files
+    if (filePath.endsWith('.routing.yml') && yamlRouteParser) {
+      if (event.type === 1 || event.type === 2) {
+        await yamlRouteParser.handleFileChange(filePath).catch((err) => {
+          connection.console.error(`Failed to reindex ${filePath}: ${err}`);
+        });
+        connection.console.log(`Reindexed: ${filePath}`);
+      }
+      if (event.type === 3) {
+        yamlRouteParser.handleFileDelete(filePath);
+        connection.console.log(`Removed from index: ${filePath}`);
+      }
+    }
+
+    // Handle .links.*.yml files
+    if (filePath.includes('.links.') && yamlLinkParser) {
+      if (event.type === 1 || event.type === 2) {
+        await yamlLinkParser.handleFileChange(filePath).catch((err) => {
+          connection.console.error(`Failed to reindex ${filePath}: ${err}`);
+        });
+        connection.console.log(`Reindexed: ${filePath}`);
+      }
+      if (event.type === 3) {
+        yamlLinkParser.handleFileDelete(filePath);
+        connection.console.log(`Removed from index: ${filePath}`);
+      }
     }
   }
 });

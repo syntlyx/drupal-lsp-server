@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as YAML from 'yaml';
 import fg from 'fast-glob';
 import { DrupalProjectResolver } from '../utils/DrupalProjectResolver';
+import { getCacheManager } from '../server';
 
 export interface DrupalService {
   name: string;
@@ -37,20 +38,21 @@ interface YamlServicesNode {
 
 /**
  * Parser for Drupal YAML service files
- * Caches parsed services for performance
+ * Uses global cache with infinite TTL for service definitions
  * Scans modules/custom for *.services.yml files
  */
 export class YamlServiceParser {
-  private servicesCache: Map<string, DrupalService[]> = new Map();
   private drupalResolver: DrupalProjectResolver;
   private scannedFiles: Set<string> = new Set();
+  private readonly SERVICES_CACHE_PREFIX = 'yaml:services:';
+  private readonly SERVICES_TTL = Infinity; // Never expire automatically
 
   constructor(drupalResolver: DrupalProjectResolver) {
     this.drupalResolver = drupalResolver;
   }
 
   /**
-   * Parse services from the YAML file
+   * Parse services from the YAML file and cache with infinite TTL
    */
   async parseFile(filePath: string): Promise<DrupalService[]> {
     try {
@@ -104,7 +106,11 @@ export class YamlServiceParser {
         }
       }
 
-      this.servicesCache.set(filePath, services);
+      // Cache with infinite TTL
+      const cache = getCacheManager();
+      const cacheKey = this.SERVICES_CACHE_PREFIX + filePath;
+      cache.set(cacheKey, services, this.SERVICES_TTL);
+      
       return services;
     } catch (error) {
       // Silently ignore YAML parse errors
@@ -156,16 +162,29 @@ export class YamlServiceParser {
 
   /**
    * Scan and index all service files
+   * If cache is empty, triggers full reindex
    */
   async scanAndIndex(): Promise<number> {
-    const files = await this.findAllServiceFiles();
+    // Check if cache is empty - if yes, do full reindex
+    const hasCache = this.scannedFiles.size > 0 && this.hasCachedServices();
+    
+    if (!hasCache) {
+      const files = await this.findAllServiceFiles();
 
-    for (const file of files) {
-      await this.parseFile(file);
-      this.scannedFiles.add(file);
+      for (const file of files) {
+        await this.parseFile(file);
+        this.scannedFiles.add(file);
+      }
     }
 
     return this.getAllServices().length;
+  }
+
+  /**
+   * Check if we have any cached services
+   */
+  private hasCachedServices(): boolean {
+    return this.getAllServices().length > 0;
   }
 
   /**
@@ -189,13 +208,17 @@ export class YamlServiceParser {
   }
 
   /**
-   * Clear cache
+   * Clear cache for specific file or all files
    */
   clearCache(filePath?: string): void {
+    const cache = getCacheManager();
+    
     if (filePath) {
-      this.servicesCache.delete(filePath);
+      const cacheKey = this.SERVICES_CACHE_PREFIX + filePath;
+      cache.delete(cacheKey);
     } else {
-      this.servicesCache.clear();
+      // Clear all service cache entries
+      cache.clearPattern(this.SERVICES_CACHE_PREFIX + '*');
     }
   }
 
@@ -204,31 +227,46 @@ export class YamlServiceParser {
    */
   getAllServiceNames(): string[] {
     const names: string[] = [];
-    for (const services of this.servicesCache.values()) {
-      names.push(...services.map((s) => s.name));
-    }
+    const services = this.getAllServices();
+    names.push(...services.map((s) => s.name));
     return names;
   }
 
   /**
-   * Get all services with metadata
+   * Get all services with metadata from cache
    */
   getAllServices(): DrupalService[] {
+    const cache = getCacheManager();
     const allServices: DrupalService[] = [];
-    for (const services of this.servicesCache.values()) {
-      allServices.push(...services);
+    
+    for (const filePath of this.scannedFiles) {
+      const cacheKey = this.SERVICES_CACHE_PREFIX + filePath;
+      const services = cache.get(cacheKey) as DrupalService[] | undefined;
+      
+      if (services) {
+        allServices.push(...services);
+      }
     }
+    
     return allServices;
   }
 
   /**
-   * Get service by name
+   * Get service by name from cache
    */
   getService(serviceName: string): DrupalService | null {
-    for (const services of this.servicesCache.values()) {
-      const service = services.find((s) => s.name === serviceName);
-      if (service) return service;
+    const cache = getCacheManager();
+    
+    for (const filePath of this.scannedFiles) {
+      const cacheKey = this.SERVICES_CACHE_PREFIX + filePath;
+      const services = cache.get(cacheKey) as DrupalService[] | undefined;
+      
+      if (services) {
+        const service = services.find((s) => s.name === serviceName);
+        if (service) return service;
+      }
     }
+    
     return null;
   }
 
