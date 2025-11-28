@@ -1,9 +1,10 @@
-import { CompletionItem, CompletionItemKind, Position, TextEdit, Range } from 'vscode-languageserver';
+import { CompletionItem, CompletionItemKind, Position } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { ICompletionProvider } from '../ICompletionProvider';
-import { BaseServiceProvider } from './BaseServiceProvider';
-import { BaseServiceNameExtractor } from './BaseServiceNameExtractor';
+import { DrupalService } from '../../parsers/YamlServiceParser';
 import { getYamlServiceParser } from '../../server';
+import { ICompletionProvider } from '../ICompletionProvider';
+import { BaseServiceNameExtractor } from './BaseServiceNameExtractor';
+import { BaseServiceProvider } from './BaseServiceProvider';
 
 /**
  * Base Completion Provider
@@ -12,7 +13,7 @@ import { getYamlServiceParser } from '../../server';
 export abstract class BaseCompletionProvider extends BaseServiceProvider implements ICompletionProvider {
   protected extractor: BaseServiceNameExtractor;
 
-  constructor(extractor: BaseServiceNameExtractor) {
+  protected constructor(extractor: BaseServiceNameExtractor) {
     super();
     this.extractor = extractor;
   }
@@ -60,17 +61,17 @@ export abstract class BaseCompletionProvider extends BaseServiceProvider impleme
    * Can be overridden for language-specific formatting (e.g., @ prefix in YAML)
    */
   protected buildCompletionItems(
-    services: any[],
+    services: DrupalService[],
     typedText: string,
-    document: TextDocument,
-    position: Position
+    _document: TextDocument,
+    _position: Position
   ): CompletionItem[] {
-    return services.map(service => {
+    return services.map((service) => {
       const detail = this.buildServiceDetail(service);
       const sortPrefix = this.getSortPrefix(service.sourceType);
 
       // Smart sorting: prioritize prefix matches
-      let matchScore = this.calculateMatchScore(service.name, typedText, sortPrefix);
+      const matchScore = this.calculateMatchScore(service.name, typedText, sortPrefix);
 
       return {
         label: service.name,

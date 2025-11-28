@@ -2,7 +2,6 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Diagnostic } from 'vscode-languageserver';
 import { IDiagnosticProvider } from '../IDiagnosticProvider';
 import { BaseDiagnosticProvider } from '../base/BaseDiagnosticProvider';
-import { PhpServiceNameExtractor } from './PhpServiceNameExtractor';
 import { getPhpCsProvider } from '../../server';
 
 /**
@@ -10,11 +9,8 @@ import { getPhpCsProvider } from '../../server';
  * Validates service names in DI container calls + PHPCS diagnostics
  */
 export class PhpDiagnosticProvider extends BaseDiagnosticProvider implements IDiagnosticProvider {
-  private extractor: PhpServiceNameExtractor;
-
   constructor() {
     super();
-    this.extractor = new PhpServiceNameExtractor();
   }
 
   canProvide(document: TextDocument): boolean {
@@ -52,7 +48,7 @@ export class PhpDiagnosticProvider extends BaseDiagnosticProvider implements IDi
         const phpCsDiagnostics = await phpCsProvider.getDiagnostics(document);
         diagnostics.push(...phpCsDiagnostics);
       }
-    } catch (error) {
+    } catch {
       // Silently ignore phpcs errors
     }
 

@@ -1,9 +1,10 @@
 import { Definition, Location, Position, Range } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { IDefinitionProvider } from '../IDefinitionProvider';
-import { BaseClassResolver } from '../base/BaseClassResolver';
+import { BaseClassResolver, ClassInfo } from '../base/BaseClassResolver';
 import { YamlServiceNameExtractor } from './YamlServiceNameExtractor';
-import { getYamlServiceParser, getDrupalResolver } from '../../server';
+import { getYamlServiceParser } from '../../server';
+import { YamlServiceParser } from '../../parsers/YamlServiceParser';
 
 /**
  * YAML Definition Provider
@@ -12,14 +13,17 @@ import { getYamlServiceParser, getDrupalResolver } from '../../server';
  * - Service references (parent: service_name, @service_name)
  */
 export class YamlDefinitionProvider implements IDefinitionProvider {
+  private yamlParser: YamlServiceParser;
   private extractor: YamlServiceNameExtractor;
-  private classResolver: BaseClassResolver | null = null;
+  private classResolver: BaseClassResolver;
 
   constructor() {
     this.extractor = new YamlServiceNameExtractor();
+    this.yamlParser = getYamlServiceParser();
+    this.classResolver = new BaseClassResolver(this.yamlParser.getDrupalRoot());
   }
 
-  canProvide(document: TextDocument, position: Position): boolean {
+  canProvide(document: TextDocument): boolean {
     const uri = document.uri;
     return uri.endsWith('.yml') || uri.endsWith('.yaml');
   }
@@ -30,13 +34,13 @@ export class YamlDefinitionProvider implements IDefinitionProvider {
       end: { line: position.line, character: 1000 }
     });
 
-    // 1. Check if we're on a class: line
-    const classMatch = line.match(/^\s*class:\s*['"]?([A-Za-z0-9_\\]+)['"]?\s*$/);
-    if (classMatch) {
-      return this.resolveClassDefinition(classMatch[1]);
+    // Check if we're on a class: line
+    const classInfo = this.classResolver.extractClassFromRoutingLine(line, position.character);
+    if (classInfo) {
+      return this.resolveClassDefinition(classInfo);
     }
 
-    // 2. Check if we're on parent or @service
+    // Check if we're on parent or @service
     const serviceName = this.extractor.extractServiceName(line, position.character);
     if (serviceName) {
       return this.resolveServiceDefinition(serviceName);
@@ -48,27 +52,21 @@ export class YamlDefinitionProvider implements IDefinitionProvider {
   /**
    * Resolve class definition location
    */
-  private async resolveClassDefinition(className: string): Promise<Definition | null> {
-    const parser = getYamlServiceParser();
-
-    if (!this.classResolver) {
-      this.classResolver = new BaseClassResolver(parser.getDrupalRoot());
-    }
-
-    const filePath = this.classResolver.resolveClassPath(className);
-    if (!filePath) {
+  private async resolveClassDefinition(classInfo: ClassInfo): Promise<Definition | null> {
+    const classPath = this.classResolver.resolveClassPath(classInfo.className);
+    if (!classPath) {
       return null;
     }
 
-    return Location.create(`file://${filePath}`, Range.create(0, 0, 0, 0));
+    const location = await this.classResolver.getSymbolLocation(classPath, classInfo.methodName);
+    return Location.create(`file://${classPath}`, Range.create(location, 0, location, 0));
   }
 
   /**
    * Resolve service definition location
    */
   private async resolveServiceDefinition(serviceName: string): Promise<Definition | null> {
-    const parser = getYamlServiceParser();
-    const service = parser.getService(serviceName);
+    const service = this.yamlParser.getService(serviceName);
 
     if (!service || !service.sourceFile) {
       return null;

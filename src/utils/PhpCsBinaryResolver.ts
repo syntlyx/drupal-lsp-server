@@ -6,7 +6,7 @@ import { execSync } from 'child_process';
  * Resolves phpcs and phpcbf binary locations
  */
 export class PhpCsBinaryResolver {
-  private workspaceRoot: string;
+  private readonly workspaceRoot: string;
   private phpcsPath: string | null = null;
   private phpcbfPath: string | null = null;
   private configPath: string | null = null;
@@ -48,7 +48,7 @@ export class PhpCsBinaryResolver {
       if (result && fs.existsSync(result)) {
         return result;
       }
-    } catch (error) {
+    } catch {
       // Binary not found globally
     }
     return null;
@@ -100,13 +100,6 @@ export class PhpCsBinaryResolver {
    */
   getPhpcbfPath(): string | null {
     return this.phpcbfPath;
-  }
-
-  /**
-   * Get config file path
-   */
-  getConfigPath(): string | null {
-    return this.configPath;
   }
 
   /**

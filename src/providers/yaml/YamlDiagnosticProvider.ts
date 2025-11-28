@@ -2,18 +2,14 @@ import { Diagnostic } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { IDiagnosticProvider } from '../IDiagnosticProvider';
 import { BaseDiagnosticProvider } from '../base/BaseDiagnosticProvider';
-import { YamlServiceNameExtractor } from './YamlServiceNameExtractor';
 
 /**
  * YAML Diagnostic Provider
  * Validates service references in .services.yml files
  */
 export class YamlDiagnosticProvider extends BaseDiagnosticProvider implements IDiagnosticProvider {
-  private extractor: YamlServiceNameExtractor;
-
   constructor() {
     super();
-    this.extractor = new YamlServiceNameExtractor();
   }
 
   canProvide(document: TextDocument): boolean {

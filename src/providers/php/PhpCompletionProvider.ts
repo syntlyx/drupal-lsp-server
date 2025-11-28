@@ -2,6 +2,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Position, CompletionItem, TextEdit, Range } from 'vscode-languageserver';
 import { BaseCompletionProvider } from '../base/BaseCompletionProvider';
 import { PhpServiceNameExtractor } from './PhpServiceNameExtractor';
+import { DrupalService } from '../../parsers/YamlServiceParser';
 
 /**
  * PHP Completion Provider
@@ -12,22 +13,22 @@ export class PhpCompletionProvider extends BaseCompletionProvider {
     super(new PhpServiceNameExtractor());
   }
 
-  canProvide(document: TextDocument, position: Position): boolean {
+  canProvide(document: TextDocument): boolean {
     return document.languageId === 'php' || document.uri.endsWith('.php');
   }
 
-  protected isServiceCompletionContext(line: string, position: Position): boolean {
+  protected isServiceCompletionContext(line: string): boolean {
     return this.getServiceCallInfo(line) !== null;
   }
 
-  protected getTypedText(line: string, position: Position): string {
+  protected getTypedText(line: string): string {
     const callInfo = this.getServiceCallInfo(line);
     if (!callInfo) return '';
     return line.substring(callInfo.quoteStart + 1).trim();
   }
 
   protected buildCompletionItems(
-    services: any[],
+    services: DrupalService[],
     typedText: string,
     document: TextDocument,
     position: Position
@@ -49,7 +50,7 @@ export class PhpCompletionProvider extends BaseCompletionProvider {
       position.character
     );
 
-    return services.map(service => {
+    return services.map((service) => {
       const detail = this.buildServiceDetail(service);
       const sortPrefix = this.getSortPrefix(service.sourceType);
       const matchScore = this.calculateMatchScore(service.name, typedText, sortPrefix);

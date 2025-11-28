@@ -5,20 +5,24 @@ import { BaseClassResolver } from '../base/BaseClassResolver';
 import { PhpServiceNameExtractor } from './PhpServiceNameExtractor';
 import { getYamlServiceParser } from '../../server';
 import * as fs from 'fs';
+import { YamlServiceParser } from '../../parsers/YamlServiceParser';
 
 /**
  * PHP Definition Provider
  * Handles go-to-definition for DI container calls
  */
 export class PhpDefinitionProvider implements IDefinitionProvider {
+  private yamlParser: YamlServiceParser;
   private extractor: PhpServiceNameExtractor;
-  private classResolver: BaseClassResolver | null = null;
+  private classResolver: BaseClassResolver;
 
   constructor() {
     this.extractor = new PhpServiceNameExtractor();
+    this.yamlParser = getYamlServiceParser();
+    this.classResolver = new BaseClassResolver(this.yamlParser.getDrupalRoot());
   }
 
-  canProvide(document: TextDocument, position: Position): boolean {
+  canProvide(document: TextDocument): boolean {
     return document.languageId === 'php' || document.uri.endsWith('.php');
   }
 
@@ -31,21 +35,16 @@ export class PhpDefinitionProvider implements IDefinitionProvider {
     const serviceName = this.extractor.extractServiceName(line, position.character);
     if (!serviceName) return null;
 
-    const parser = getYamlServiceParser();
-    const service = parser.getService(serviceName);
+    const service = this.yamlParser.getService(serviceName);
     if (!service) return null;
-
-    // Initialize class resolver if needed
-    if (!this.classResolver) {
-      this.classResolver = new BaseClassResolver(parser.getDrupalRoot());
-    }
 
     // Priority: class definition > YAML definition
     if (service.class) {
       const classPath = this.classResolver.resolveClassPath(service.class);
 
       if (classPath && fs.existsSync(classPath)) {
-        return Location.create(`file://${classPath}`, Range.create(0, 0, 0, 0));
+        const location = await this.classResolver.getSymbolLocation(classPath);
+        return Location.create(`file://${classPath}`, Range.create(location, 0, location, 0));
       }
     }
 

@@ -10,27 +10,13 @@ export abstract class BaseServiceProvider {
    * Removes class aliases and special directives
    */
   protected filterValidServices(services: DrupalService[]): DrupalService[] {
-    return services.filter(service => {
+    return services.filter((service) => {
       // Filter out class aliases (contain backslashes)
       if (service.name.includes('\\')) return false;
 
       // Filter out special directives (start with underscore)
-      if (service.name.startsWith('_')) return false;
-
-      return true;
+      return !service.name.startsWith('_');
     });
-  }
-
-  /**
-   * Get service type label for display
-   */
-  protected getServiceTypeLabel(sourceType?: string): string {
-    switch (sourceType) {
-      case 'core': return '[Core]';
-      case 'contrib': return '[Contrib]';
-      case 'custom': return '[Custom]';
-      default: return '[Unknown]';
-    }
   }
 
   /**
@@ -53,8 +39,7 @@ export abstract class BaseServiceProvider {
    * Build service detail string for display
    */
   protected buildServiceDetail(service: DrupalService): string {
-    const label = this.getServiceTypeLabel(service.sourceType);
-    return service.class ? `${label} ${service.class}` : label;
+    return service.class ? service.class : service.name;
   }
 
   /**

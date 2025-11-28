@@ -30,8 +30,7 @@ export class YamlCompletionProvider extends BaseCompletionProvider {
       return [];
     }
 
-    const charBeforeCursor = position.character > 0 ? line[position.character - 1] : '';
-    const completionType = this.detectCompletionType(line, charBeforeCursor);
+    const completionType = this.detectCompletionType(line);
 
     switch (completionType) {
       case 'service-name':
@@ -46,12 +45,12 @@ export class YamlCompletionProvider extends BaseCompletionProvider {
     }
   }
 
-  protected isServiceCompletionContext(line: string, position: Position): boolean {
-    return this.detectCompletionType(line, '') === 'service-name' ||
-      this.detectCompletionType(line, '') === 'parent';
+  protected isServiceCompletionContext(line: string): boolean {
+    return this.detectCompletionType(line) === 'service-name' ||
+      this.detectCompletionType(line) === 'parent';
   }
 
-  protected getTypedText(line: string, position: Position): string {
+  protected getTypedText(line: string): string {
     // Extract typed service name
     const match = line.match(/:\s*['"]?([a-zA-Z0-9_.]*)$/);
     return match ? match[1] : '';
@@ -61,7 +60,7 @@ export class YamlCompletionProvider extends BaseCompletionProvider {
     return text.substring(0, offset).includes('services:');
   }
 
-  private detectCompletionType(line: string, charBeforeCursor: string): string {
+  private detectCompletionType(line: string): string {
     if (line.trim().startsWith('class:')) return 'class-name';
     if (line.trim().startsWith('parent:')) return 'parent';
 
@@ -70,7 +69,7 @@ export class YamlCompletionProvider extends BaseCompletionProvider {
     const inArgumentsArray = /arguments:\s*\[/.test(line);
     const inArgumentsList = line.trim().startsWith('-') && line.includes('@');
     const hasCommaBeforeCursor = line.includes(',');
-    
+
     if (inArgumentsArray || inArgumentsList || hasCommaBeforeCursor) {
       return 'argument-service';
     }
@@ -139,12 +138,12 @@ export class YamlCompletionProvider extends BaseCompletionProvider {
     // Extract the current word being typed
     const currentWord = line.substring(wordStart, position.character).trim();
     const startsWithAt = currentWord.startsWith('@');
-    
+
     // Typed text for filtering (without @)
     const typedText = startsWithAt ? currentWord.substring(1) : currentWord;
 
     // Build completion items
-    return validServices.map(service => {
+    return validServices.map((service) => {
       const detail = this.buildServiceDetail(service);
       const sortPrefix = this.getSortPrefix(service.sourceType);
       const matchScore = this.calculateMatchScore(service.name, typedText, sortPrefix);

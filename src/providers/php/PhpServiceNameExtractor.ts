@@ -31,10 +31,6 @@ export class PhpServiceNameExtractor extends BaseServiceNameExtractor {
     return null;
   }
 
-  isServiceContext(line: string, character: number): boolean {
-    return this.extractServiceName(line, character) !== null;
-  }
-
   /**
    * Check if character position is within the service name in match
    */

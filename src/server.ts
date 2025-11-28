@@ -43,12 +43,7 @@ let workspaceRoot: string | undefined;
 let drupalResolver: DrupalProjectResolver;
 let yamlServiceParser: YamlServiceParser;
 let phpCsProvider: PhpCsProvider;
-let serverSettings: ServerSettings = defaultSettings;
-
-// Export context for providers
-export function getDrupalResolver(): DrupalProjectResolver {
-  return drupalResolver;
-}
+const serverSettings: ServerSettings = defaultSettings;
 
 export function getYamlServiceParser(): YamlServiceParser {
   return yamlServiceParser;
@@ -58,8 +53,8 @@ export function getPhpCsProvider(): PhpCsProvider {
   return phpCsProvider;
 }
 
-export function getWorkspaceRoot(): string | undefined {
-  return workspaceRoot;
+export function isCustomModulesPath(filePath: string): boolean {
+  return filePath.includes('/modules/custom');
 }
 
 // Providers registry
@@ -160,6 +155,10 @@ connection.onCompletion(
 
     const results: CompletionItem[] = [];
 
+    if (!isCustomModulesPath(document.uri)) {
+      return results;
+    }
+
     for (const provider of completionProviders) {
       if (provider.canProvide(document, params.position)) {
         try {
@@ -233,7 +232,7 @@ documents.onDidChangeContent(async (change) => {
 
   // Only reindex if it's a .services.yml file in modules/custom
   if (filePath.endsWith('.services.yml') && yamlServiceParser) {
-    if (yamlServiceParser.isCustomModuleFile(filePath)) {
+    if (!isCustomModulesPath(filePath)) {
       await yamlServiceParser.handleFileChange(filePath).catch((err) => {
         connection.console.error(`Failed to reindex ${filePath}: ${err}`);
       });
@@ -248,7 +247,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
 
     if (!filePath.endsWith('.services.yml')) continue;
     if (!yamlServiceParser) continue;
-    if (!yamlServiceParser.isCustomModuleFile(filePath)) continue;
+    if (!isCustomModulesPath(filePath)) continue;
 
     // Handle file creation or modification
     if (event.type === 1 || event.type === 2) { // Created or Changed
@@ -269,7 +268,7 @@ connection.onDidChangeWatchedFiles(async (change) => {
 // Pull Diagnostics handler (LSP 3.17)
 connection.languages.diagnostics.on(async (params) => {
   const document = documents.get(params.textDocument.uri);
-  if (!document) {
+  if (!document || !isCustomModulesPath(document.uri)) {
     return { kind: 'full' as const, items: [] };
   }
 
@@ -294,14 +293,13 @@ connection.onCodeAction(
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
 
-    if (!phpCsProvider || !phpCsProvider.isEnabled()) {
+    if (!phpCsProvider || !phpCsProvider.isEnabled() || !isCustomModulesPath(document.uri)) {
       return [];
     }
 
     try {
       return await phpCsProvider.getCodeActions(
         document,
-        params.range,
         params.context.diagnostics
       );
     } catch (err) {
@@ -342,7 +340,7 @@ connection.onDocumentFormatting(
       return null;
     }
 
-    if (!phpCsProvider || !phpCsProvider.isEnabled()) {
+    if (!phpCsProvider || !phpCsProvider.isEnabled() || !isCustomModulesPath(document.uri)) {
       return null;
     }
 

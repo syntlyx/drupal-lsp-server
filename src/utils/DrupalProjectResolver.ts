@@ -6,12 +6,12 @@ import * as path from 'path';
  * Handles different Drupal root locations: root, web/, docroot/
  */
 export class DrupalProjectResolver {
-  private workspaceRoot: string;
+  private readonly workspaceRoot: string;
   private drupalRoot: string | null = null;
-  
+
   // Common Drupal root directories
   private static DRUPAL_ROOT_CANDIDATES = ['', 'web', 'docroot'];
-  
+
   // Files that indicate Drupal root
   private static DRUPAL_INDICATORS = [
     'core/lib/Drupal.php',
@@ -30,7 +30,7 @@ export class DrupalProjectResolver {
   private detectDrupalRoot(): void {
     for (const candidate of DrupalProjectResolver.DRUPAL_ROOT_CANDIDATES) {
       const testPath = path.join(this.workspaceRoot, candidate);
-      
+
       if (this.isDrupalRoot(testPath)) {
         this.drupalRoot = candidate;
         return;
@@ -71,65 +71,6 @@ export class DrupalProjectResolver {
    */
   resolveDrupalPath(relativePath: string): string {
     return path.join(this.getDrupalRootAbsolute(), relativePath);
-  }
-
-  /**
-   * Check if file exists in Drupal root
-   */
-  drupalFileExists(relativePath: string): boolean {
-    return fs.existsSync(this.resolveDrupalPath(relativePath));
-  }
-
-  /**
-   * Resolve class file path
-   * Handles: Drupal\Core, Drupal\Component, Drupal\module_name
-   */
-  resolveClassFile(fqn: string): string | null {
-    // Core: Drupal\Core\Logger\LoggerChannelFactory
-    if (fqn.startsWith('Drupal\\Core\\')) {
-      const relativePath = fqn.replace(/\\/g, '/');
-      const filePath = this.resolveDrupalPath(`core/lib/${relativePath}.php`);
-      if (fs.existsSync(filePath)) return filePath;
-    }
-
-    // Component: Drupal\Component\Utility\...
-    if (fqn.startsWith('Drupal\\Component\\')) {
-      const relativePath = fqn.replace(/\\/g, '/');
-      const filePath = this.resolveDrupalPath(`core/lib/${relativePath}.php`);
-      if (fs.existsSync(filePath)) return filePath;
-    }
-
-    // Module: Drupal\module_name\...
-    const moduleMatch = fqn.match(/^Drupal\\([^\\]+)\\/);
-    if (moduleMatch) {
-      const moduleName = moduleMatch[1];
-      const classPath = fqn.replace(/^Drupal\\[^\\]+\\/, '').replace(/\\/g, '/');
-      
-      // Try: modules/{module}/src/
-      const moduleBase = this.resolveDrupalPath(`modules/${moduleName}/src/${classPath}.php`);
-      if (fs.existsSync(moduleBase)) return moduleBase;
-      
-      // Try: modules/custom/{module}/src/
-      const customPath = this.resolveDrupalPath(`modules/custom/${moduleName}/src/${classPath}.php`);
-      if (fs.existsSync(customPath)) return customPath;
-      
-      // Try: modules/contrib/{module}/src/
-      const contribPath = this.resolveDrupalPath(`modules/contrib/${moduleName}/src/${classPath}.php`);
-      if (fs.existsSync(contribPath)) return contribPath;
-    }
-
-    return null;
-  }
-
-  /**
-   * Find .phpstorm.meta.php location
-   */
-  findPhpStormMetaPath(): string | null {
-    const metaPath = this.resolveDrupalPath('.phpstorm.meta.php');
-    if (fs.existsSync(metaPath)) {
-      return metaPath;
-    }
-    return null;
   }
 
   /**

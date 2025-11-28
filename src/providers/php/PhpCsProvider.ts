@@ -38,7 +38,7 @@ interface CacheEntry {
  */
 export class PhpCsProvider {
   private resolver: PhpCsBinaryResolver;
-  private enabled: boolean = true;
+  private readonly enabled: boolean = true;
   private cache: Map<string, CacheEntry> = new Map();
 
   constructor(workspaceRoot: string, enabled: boolean = true) {
@@ -70,14 +70,9 @@ export class PhpCsProvider {
 
       const phpcs = spawn(phpcsPath, args);
       let stdout = '';
-      let stderr = '';
 
       phpcs.stdout.on('data', (data) => {
         stdout += data.toString();
-      });
-
-      phpcs.stderr.on('data', (data) => {
-        stderr += data.toString();
       });
 
       phpcs.on('close', () => {
@@ -106,20 +101,6 @@ export class PhpCsProvider {
   }
 
   /**
-   * Clear cache for specific document
-   */
-  clearCache(uri: string): void {
-    this.cache.delete(uri);
-  }
-
-  /**
-   * Clear all cache
-   */
-  clearAllCache(): void {
-    this.cache.clear();
-  }
-
-  /**
    * Parse PHPCS JSON output to LSP Diagnostics
    */
   private parsePhpcsOutput(output: string, document: TextDocument): Diagnostic[] {
@@ -143,7 +124,7 @@ export class PhpCsProvider {
           range: Range.create(line, col, line, col + 1),
           message: message.message,
           source: `phpcs (${message.source})`,
-          code: message.source,
+          code: message.source
         };
 
         diagnostics.push(diagnostic);
@@ -159,12 +140,12 @@ export class PhpCsProvider {
   /**
    * Get code actions (phpcbf auto-fix)
    */
-  async getCodeActions(document: TextDocument, range: Range, diagnostics: Diagnostic[]): Promise<CodeAction[]> {
+  async getCodeActions(document: TextDocument, diagnostics: Diagnostic[]): Promise<CodeAction[]> {
     if (!this.enabled || !this.resolver.isPhpcbfAvailable()) {
       return [];
     }
 
-    const phpcsActions = diagnostics.filter(d => d.source?.startsWith('phpcs'));
+    const phpcsActions = diagnostics.filter((d) => d.source?.startsWith('phpcs'));
     if (phpcsActions.length === 0) {
       return [];
     }
@@ -175,8 +156,8 @@ export class PhpCsProvider {
       command: {
         title: 'Run phpcbf',
         command: 'drupalLsp.runPhpcbf',
-        arguments: [document.uri],
-      },
+        arguments: [document.uri]
+      }
     };
 
     return [action];
@@ -198,11 +179,11 @@ export class PhpCsProvider {
       const command = `${phpcbfPath} --standard="${standard}" "${filePath}"`;
 
       await execAsync(command, {
-        maxBuffer: 1024 * 1024 * 10,
+        maxBuffer: 1024 * 1024 * 10
       });
 
       return true;
-    } catch (error) {
+    } catch {
       // phpcbf returns exit code 1 if fixes were made
       // exit code 2 if fixable errors remain
       // We consider both as success

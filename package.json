@@ -1,6 +1,6 @@
 {
   "name": "drupal-lsp-server",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "LSP server for Drupal with YAML autocomplete, PHP class navigation, and phpcs integration",
   "author": "syntlyx",
   "license": "MIT",
@@ -13,7 +13,7 @@
     "url": "https://github.com/syntlyx/drupal-lsp-server/issues"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "drupal",
@@ -35,22 +35,21 @@
   "scripts": {
     "compile": "tsc -b",
     "watch": "tsc -b -w",
-    "prepublishOnly": "npm run compile",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "test": "echo \"No tests yet\""
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
-    "fast-glob": "^3.2.12",
+    "fast-glob": "^3.3.3",
     "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.11",
-    "yaml": "^2.3.4"
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@typescript-eslint/eslint-plugin": "^6.15.0",
-    "@typescript-eslint/parser": "^6.15.0",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3"
+    "@types/node": "^20.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "eslint": "^9.39.1",
+    "typescript": "^5.6",
+    "typescript-eslint": "^ 8.48.0"
   }
 }

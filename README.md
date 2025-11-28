@@ -42,63 +42,6 @@ npm run compile
 npm link
 ```
 
-## Editor Configuration
-
-### Zed Editor
-
-Create `.zed/settings.json` in your Drupal project:
-
-```json
-{
-  "lsp": {
-    "drupal-lsp-server": {
-      "language_servers": ["drupal-lsp-server"]
-    }
-  },
-  "languages": {
-    "YAML": {
-      "language_servers": ["drupal-lsp-server", "..."]
-    },
-    "PHP": {
-      "language_servers": ["drupal-lsp-server", "..."]
-    }
-  }
-}
-```
-
-Add server initialization in Zed's global settings:
-
-```json
-{
-  "language_servers": {
-    "drupal-lsp-server": {
-      "command": {
-        "path": "/path/to/drupal-lsp-server/bin/drupal-lsp-server",
-        "arguments": ["--stdio"]
-      },
-      "settings": {
-        "enablePhpcs": true
-      }
-    }
-  }
-}
-```
-
-### VS Code
-
-Install via extension (coming soon) or configure manually in `settings.json`:
-
-```json
-{
-  "drupal-lsp": {
-    "enable": true,
-    "phpcs": {
-      "enable": true
-    }
-  }
-}
-```
-
 ## Architecture
 
 Modular provider-based architecture for maintainability and extensibility:
@@ -147,8 +90,8 @@ src/
 
 ### Prerequisites
 
-- Node.js 16+
-- TypeScript 5.3+
+- Node.js 20+
+- TypeScript 5.6+
 - A Drupal 9/10/11 project for testing
 
 ### Build

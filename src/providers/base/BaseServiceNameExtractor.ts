@@ -8,10 +8,4 @@ export abstract class BaseServiceNameExtractor {
    * Returns service name or null if not found
    */
   abstract extractServiceName(line: string, character: number): string | null;
-
-  /**
-   * Check if position is inside DI container call
-   * Returns true if we should provide service completions/definitions
-   */
-  abstract isServiceContext(line: string, character: number): boolean;
 }

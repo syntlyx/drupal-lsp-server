@@ -1,6 +1,7 @@
 {
   "languages": {
     "TypeScript": {
+      "language_servers": ["typescript-language-server", "!vtsls", "..."],
       "format_on_save": "on",
       "code_actions_on_format": {
         "source.fixAll.eslint": true
@@ -8,18 +9,9 @@
       "formatter": "language_server"
     }
   },
-  "lsp": {
-    "eslint": {
-      "settings": {
-        "validate": ["typescript"],
-        "run": "onType"
-      }
-    }
-  },
   "tab_size": 2,
   "hard_tabs": false,
   "preferred_line_length": 100,
-  "format_on_save": "on",
   "remove_trailing_whitespace_on_save": true,
   "ensure_final_newline_on_save": true
 }

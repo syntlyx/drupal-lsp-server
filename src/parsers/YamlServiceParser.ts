@@ -7,13 +7,32 @@ export interface DrupalService {
   name: string;
   class?: string;
   parent?: string;
-  arguments?: any[];
-  tags?: any[];
-  calls?: any[];
+  arguments?: string[];
   factory?: string | string[];
   sourceFile?: string; // Path to .services.yml file
   sourceLine?: string;
   sourceType?: 'core' | 'contrib' | 'custom'; // Service origin
+}
+
+interface YamlServiceDefinition {
+  class?: string;
+  parent?: string;
+  arguments?: unknown[];
+  factory?: string | string[];
+  alias?: string;
+  [key: string]: unknown;
+}
+
+interface YamlPair {
+  key?: {
+    value: string;
+    range?: [number, number];
+  };
+  value: YAML.Node | string;
+}
+
+interface YamlServicesNode {
+  items?: YamlPair[];
 }
 
 /**
@@ -31,7 +50,7 @@ export class YamlServiceParser {
   }
 
   /**
-   * Parse services from YAML file
+   * Parse services from the YAML file
    */
   async parseFile(filePath: string): Promise<DrupalService[]> {
     try {
@@ -48,7 +67,8 @@ export class YamlServiceParser {
       const sourceType = this.determineSourceType(filePath);
 
       // Iterate over service definitions
-      for (const pair of (servicesNode as any).items || []) {
+      const yamlNode = servicesNode as YamlServicesNode;
+      for (const pair of yamlNode.items || []) {
         const name = pair.key?.value;
         const definition = pair.value;
 
@@ -61,79 +81,58 @@ export class YamlServiceParser {
           lineNumber = pos.line;
         }
 
-        // Handle both object definitions and aliases (e.g., '@service_name')
-        let defObj: any = {};
+        // Handle both object definitions and aliases
+        let defObj: YamlServiceDefinition = {};
         if (typeof definition === 'string') {
-          // Simple alias like: service_name: '@another_service'
           defObj = { alias: definition };
-        } else if (definition && definition.toJSON) {
-          defObj = definition.toJSON();
-        } else if (definition) {
-          defObj = definition;
+        } else if (definition && typeof definition === 'object' && 'toJSON' in definition) {
+          const json = (definition as YAML.Node).toJSON();
+          defObj = json as YamlServiceDefinition;
         }
 
-        // Ensure defObj is an object
-        if (!defObj || typeof defObj !== 'object') {
-          defObj = {};
+        if (defObj) {
+          services.push({
+            name,
+            class: defObj.class,
+            parent: defObj.parent,
+            arguments: defObj.arguments as string[] | undefined,
+            factory: defObj.factory,
+            sourceFile: filePath,
+            sourceType: sourceType,
+            sourceLine: lineNumber?.toString()
+          });
         }
-
-        services.push({
-          name,
-          class: defObj.class,
-          parent: defObj.parent,
-          arguments: defObj.arguments,
-          tags: defObj.tags,
-          calls: defObj.calls,
-          factory: defObj.factory,
-          sourceFile: filePath,
-          sourceType: sourceType,
-          sourceLine: lineNumber?.toString(),
-        });
       }
 
       this.servicesCache.set(filePath, services);
       return services;
-    } catch (err) {
-      // Silently ignore YAML parse errors (e.g., !tagged_iterator, malformed syntax)
-      // These are common in Drupal service files and don't affect LSP functionality
+    } catch (error) {
+      // Silently ignore YAML parse errors
+      console.error(error);
       return [];
     }
   }
 
   /**
-   * Determine if service file is core, contrib, or custom
+   * Determine if a service file is core, contrib, or custom
    */
   private determineSourceType(filePath: string): 'core' | 'contrib' | 'custom' {
     const drupalRoot = this.drupalResolver.getDrupalRootAbsolute();
     const relativePath = filePath.replace(drupalRoot, '');
 
-    // Core: core/**/*.services.yml
     if (relativePath.includes('/core/')) {
       return 'core';
     }
 
-    // Custom: modules/custom/**/*.services.yml
     if (relativePath.includes('/modules/custom/')) {
       return 'custom';
     }
 
-    // Contrib: everything else (modules/contrib, themes, profiles, etc.)
     return 'contrib';
   }
 
   /**
-   * Get cached services or parse if not cached
-   */
-  async getServices(filePath: string, useCache = true): Promise<DrupalService[]> {
-    if (useCache && this.servicesCache.has(filePath)) {
-      return this.servicesCache.get(filePath)!;
-    }
-    return this.parseFile(filePath);
-  }
-
-  /**
    * Find all service YAML files in Drupal installation
-   * Scans: core, modules, themes for *.services.yml
    */
   async findAllServiceFiles(): Promise<string[]> {
     const drupalRoot = this.drupalResolver.getDrupalRootAbsolute();
@@ -143,14 +142,12 @@ export class YamlServiceParser {
     }
 
     try {
-      const files = await fg('**/*.services.yml', {
+      return await fg('**/*.services.yml', {
         cwd: drupalRoot,
         absolute: true,
         onlyFiles: true,
         ignore: ['**/node_modules/**', '**/vendor/**', '**/tests/**', '**/test/**']
       });
-
-      return files;
     } catch (err) {
       console.error('Failed to find service files:', err);
       return [];
@@ -158,34 +155,7 @@ export class YamlServiceParser {
   }
 
   /**
-   * Find service files only in custom modules (for watching)
-   * Scans: modules/custom/**\/*.services.yml
-   */
-  async findCustomModuleServiceFiles(): Promise<string[]> {
-    const customModulesPath = this.drupalResolver.resolveDrupalPath('modules/custom');
-
-    if (!fs.existsSync(customModulesPath)) {
-      return [];
-    }
-
-    try {
-      const files = await fg('**/*.services.yml', {
-        cwd: customModulesPath,
-        absolute: true,
-        onlyFiles: true,
-        ignore: ['**/node_modules/**', '**/vendor/**', '**/tests/**']
-      });
-
-      return files;
-    } catch (err) {
-      console.error('Failed to find custom module service files:', err);
-      return [];
-    }
-  }
-
-  /**
-   * Scan and index all service files (one-time on startup)
-   * Returns total number of indexed services
+   * Scan and index all service files
    */
   async scanAndIndex(): Promise<number> {
     const files = await this.findAllServiceFiles();
@@ -195,33 +165,15 @@ export class YamlServiceParser {
       this.scannedFiles.add(file);
     }
 
-    // Return total services count
     return this.getAllServices().length;
   }
 
   /**
-   * Get list of custom module service files for watching
-   */
-  async getCustomModuleFiles(): Promise<string[]> {
-    return this.findCustomModuleServiceFiles();
-  }
-
-  /**
-   * Check if file is in custom modules
-   */
-  isCustomModuleFile(filePath: string): boolean {
-    const customModulesPath = this.drupalResolver.resolveDrupalPath('modules/custom');
-    return filePath.startsWith(customModulesPath);
-  }
-
-  /**
-   * Handle file change event (reindex single file)
+   * Handle file change event
    */
   async handleFileChange(filePath: string): Promise<void> {
-    // Clear cache for this file
     this.clearCache(filePath);
 
-    // Re-parse if it's a service file
     if (filePath.endsWith('.services.yml')) {
       await this.parseFile(filePath);
       this.scannedFiles.add(filePath);
@@ -237,7 +189,7 @@ export class YamlServiceParser {
   }
 
   /**
-   * Clear cache for a specific file or all files
+   * Clear cache
    */
   clearCache(filePath?: string): void {
     if (filePath) {
@@ -259,7 +211,7 @@ export class YamlServiceParser {
   }
 
   /**
-   * Get all services with their metadata
+   * Get all services with metadata
    */
   getAllServices(): DrupalService[] {
     const allServices: DrupalService[] = [];
@@ -270,30 +222,18 @@ export class YamlServiceParser {
   }
 
   /**
-   * Find which file defines a service
-   */
-  findServiceFile(serviceName: string): string | null {
-    for (const [filePath, services] of this.servicesCache.entries()) {
-      if (services.some(s => s.name === serviceName)) {
-        return filePath;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Get service by name with full metadata
+   * Get service by name
    */
   getService(serviceName: string): DrupalService | null {
     for (const services of this.servicesCache.values()) {
-      const service = services.find(s => s.name === serviceName);
+      const service = services.find((s) => s.name === serviceName);
       if (service) return service;
     }
     return null;
   }
 
   /**
-   * Get Drupal root path (absolute)
+   * Get Drupal root path
    */
   getDrupalRoot(): string {
     return this.drupalResolver.getDrupalRootAbsolute();

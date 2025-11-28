@@ -17,7 +17,7 @@ export class YamlServiceNameExtractor extends BaseServiceNameExtractor {
     // Example: "- '@service_one', '@service_two', '@service_three'"
     const regex = /@([a-z0-9._]+)/g;
     let argMatch;
-    
+
     while ((argMatch = regex.exec(line)) !== null) {
       const serviceName = argMatch[1];
       const atPos = argMatch.index;
@@ -31,10 +31,5 @@ export class YamlServiceNameExtractor extends BaseServiceNameExtractor {
     }
 
     return null;
-  }
-
-  isServiceContext(line: string, character: number): boolean {
-    // Check if we're in services section (simple check)
-    return line.includes('services:') || line.trim().startsWith('@');
   }
 }
